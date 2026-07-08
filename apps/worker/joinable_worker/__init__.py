@@ -1,0 +1,1 @@
+"""Joinable Celery worker."""
