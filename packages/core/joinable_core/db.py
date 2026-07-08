@@ -18,7 +18,16 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
-        _engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        connect_args: dict[str, object] = {}
+        # Supabase poolers (Supavisor/pgbouncer) don't support asyncpg's
+        # server-side prepared statement cache; disable it for pooler hosts.
+        if "pooler.supabase.com" in settings.database_url:
+            connect_args["statement_cache_size"] = 0
+        _engine = create_async_engine(
+            settings.database_url,
+            pool_pre_ping=True,
+            connect_args=connect_args,
+        )
     return _engine
 
 

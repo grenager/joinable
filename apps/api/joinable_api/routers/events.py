@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -91,7 +91,7 @@ async def list_events(
     end: Annotated[str | None, Query(description="ISO date")] = None,
     category: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
-    sort: SortOption = "start_time",
+    sort: Annotated[Literal["start_time", "distance"], Query()] = "start_time",
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> EventListResponse:

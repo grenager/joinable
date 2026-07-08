@@ -10,12 +10,11 @@ from __future__ import annotations
 import sys
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from joinable_core.db import get_sync_engine
 from joinable_core.models import Source
 from joinable_core.scraper.pipeline import run_scrape_for_source
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 def main() -> None:

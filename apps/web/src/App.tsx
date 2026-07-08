@@ -11,12 +11,13 @@ import { EventCard } from "./components/EventCard";
 import { SearchBar } from "./components/SearchBar";
 import type { Event, GeoLocation, SearchFilters } from "./types";
 import { SF_BAY_DEFAULT } from "./types";
+import logoUrl from "./assets/logo.svg";
 import "./App.css";
 
 const DEFAULT_FILTERS: SearchFilters = {
   q: "",
   category: "music",
-  datePreset: "tonight",
+  datePreset: "all",
   radiusKm: 40,
 };
 
@@ -128,10 +129,8 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="header-top">
-          <h1 className="logo">Joinable</h1>
-          <p className="tagline">Find live events near you</p>
-        </div>
+        <img className="logo-img" src={logoUrl} alt="Joinable" />
+        <p className="tagline">Find live events near you</p>
         <div className="header-actions">
           <span className="location-badge">{locationLabel}</span>
           {session ? (

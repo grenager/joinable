@@ -15,28 +15,27 @@ body {
 }
 
 .app {
-  max-width: 720px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 1rem 1.25rem 3rem;
 }
 
 .header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
-.header-top {
-  margin-bottom: 0.75rem;
-}
-
-.logo {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin: 0;
-  color: #4f46e5;
+.logo-img {
+  display: block;
+  height: 32px;
+  width: auto;
 }
 
 .tagline {
-  margin: 0.25rem 0 0;
+  margin: 0;
   color: #64748b;
   font-size: 0.95rem;
 }
@@ -46,6 +45,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .location-badge {
@@ -112,16 +112,29 @@ body {
 }
 
 .event-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  align-items: start;
 }
 
 .event-card {
   background: white;
   border-radius: 12px;
-  padding: 1rem 1.25rem;
+  overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.event-card-body {
+  padding: 1rem 1.25rem;
+}
+
+.event-image {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  background: #e2e8f0;
 }
 
 .event-card-header {

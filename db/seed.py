@@ -92,14 +92,18 @@ DEMO_VENUES: list[dict] = [
 ]
 
 DEMO_EVENTS: list[dict] = [
-    {"title": "Indie Rock Night", "venue": "The Independent", "days_from_now": 0, "hour": 20},
-    {"title": "Local Band Showcase", "venue": "Bottom of the Hill", "days_from_now": 1, "hour": 21},
-    {"title": "Electronic Live Set", "venue": "Rickshaw Stop", "days_from_now": 2, "hour": 21},
-    {"title": "Jazz Fusion Quartet", "venue": "The Chapel", "days_from_now": 3, "hour": 19},
-    {"title": "Punk Rock Matinee", "venue": "Slim's", "days_from_now": 4, "hour": 15},
-    {"title": "Singer-Songwriter Open Mic", "venue": "The Independent", "days_from_now": 5, "hour": 20},
-    {"title": "Garage Rock Revival", "venue": "Bottom of the Hill", "days_from_now": 6, "hour": 21},
+    {"title": "Indie Rock Night", "venue": "The Independent", "days_from_now": 0, "hour": 20, "image": "photo-1470229722913-7c0e2dbbafd3"},
+    {"title": "Local Band Showcase", "venue": "Bottom of the Hill", "days_from_now": 1, "hour": 21, "image": "photo-1501386761578-eac5c94b800a"},
+    {"title": "Electronic Live Set", "venue": "Rickshaw Stop", "days_from_now": 2, "hour": 21, "image": "photo-1571019614242-c5c5dee9f50b"},
+    {"title": "Jazz Fusion Quartet", "venue": "The Chapel", "days_from_now": 3, "hour": 19, "image": "photo-1415201364774-f6f0bb35f28f"},
+    {"title": "Punk Rock Matinee", "venue": "Slim's", "days_from_now": 4, "hour": 15, "image": "photo-1524368535928-5b5e00ddc76b"},
+    {"title": "Singer-Songwriter Open Mic", "venue": "The Independent", "days_from_now": 5, "hour": 20, "image": "photo-1516280440614-37939bbacd81"},
+    {"title": "Garage Rock Revival", "venue": "Bottom of the Hill", "days_from_now": 6, "hour": 21, "image": "photo-1459749411175-04bf5292ceea"},
 ]
+
+
+def _image_url(photo_id: str) -> str:
+    return f"https://images.unsplash.com/{photo_id}?w=640&h=360&fit=crop&auto=format&q=70"
 
 
 def seed_sources(session: Session) -> None:
@@ -169,10 +173,12 @@ def seed_demo_events(session: Session) -> None:
             hour=ev["hour"], minute=0, second=0, microsecond=0
         )
         dedupe = compute_dedupe_hash(ev["title"], start.isoformat(), venue.name)
+        image_url = _image_url(ev["image"])
         existing = session.execute(
             select(Event).where(Event.dedupe_hash == dedupe)
         ).scalar_one_or_none()
         if existing:
+            existing.image_url = image_url
             continue
         event = Event(
             id=uuid.uuid4(),
@@ -184,6 +190,7 @@ def seed_demo_events(session: Session) -> None:
             start_time=start,
             category="music",
             price_text="$15-25",
+            image_url=image_url,
         )
         session.add(event)
 
