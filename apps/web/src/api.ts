@@ -38,6 +38,64 @@ export async function fetchEvents(params: FetchEventsParams): Promise<EventListR
   return response.json() as Promise<EventListResponse>;
 }
 
+export interface GeocodeResult {
+  lat: number;
+  lng: number;
+  display_name: string;
+}
+
+export async function geocodePlace(query: string): Promise<GeocodeResult | null> {
+  const response = await fetch(
+    `${API_URL}/v1/geocode?q=${encodeURIComponent(query)}`,
+    { headers: { Accept: "application/json" } }
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to geocode: ${response.status}`);
+  }
+  const data = (await response.json()) as GeocodeResult | null;
+  return data;
+}
+
+export interface PlaceSuggestion {
+  place_id: string;
+  description: string;
+}
+
+export interface SuggestResponse {
+  provider: string;
+  suggestions: PlaceSuggestion[];
+}
+
+export async function suggestPlaces(
+  query: string,
+  sessionToken: string,
+  signal?: AbortSignal
+): Promise<SuggestResponse> {
+  const params = new URLSearchParams({ q: query, session_token: sessionToken });
+  const response = await fetch(`${API_URL}/v1/geocode/suggest?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch suggestions: ${response.status}`);
+  }
+  return response.json() as Promise<SuggestResponse>;
+}
+
+export async function getPlaceDetails(
+  placeId: string,
+  sessionToken: string
+): Promise<GeocodeResult | null> {
+  const params = new URLSearchParams({ place_id: placeId, session_token: sessionToken });
+  const response = await fetch(`${API_URL}/v1/geocode/place?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch place details: ${response.status}`);
+  }
+  return (await response.json()) as GeocodeResult | null;
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   const response = await fetch(`${API_URL}/v1/categories`);
   if (!response.ok) {

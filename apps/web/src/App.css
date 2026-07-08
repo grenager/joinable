@@ -22,22 +22,25 @@ body {
 
 .header {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: baseline;
+  gap: 0.6rem;
   flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
 .logo-img {
   display: block;
-  height: 32px;
+  height: 22px;
   width: auto;
 }
 
 .tagline {
   margin: 0;
-  color: #64748b;
-  font-size: 0.95rem;
+  position: relative;
+  top: -1px;
+  color: #334155;
+  font-size: 1.1rem;
+  font-weight: 300;
 }
 
 .header-actions {
@@ -52,8 +55,70 @@ body {
   font-size: 0.85rem;
   background: #e0e7ff;
   color: #4338ca;
-  padding: 0.25rem 0.75rem;
+  padding: 0.3rem 0.8rem;
   border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.location-badge:hover {
+  background: #c7d2fe;
+}
+
+.location-input {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid #a5b4fc;
+  border-radius: 999px;
+  outline: none;
+  min-width: 200px;
+  font-family: inherit;
+}
+
+.location-error {
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
+.location-picker {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.location-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.location-suggestions .suggestion {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+
+.location-suggestions .suggestion.active,
+.location-suggestions .suggestion:hover {
+  background: #eef2ff;
 }
 
 .auth-btn {

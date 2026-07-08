@@ -40,6 +40,7 @@ class Settings(BaseSettings):
         default="Joinable/0.1 (events@joinable.dev)",
         alias="GEOCODER_USER_AGENT",
     )
+    google_maps_api_key: str = Field(default="", alias="GOOGLE_MAPS_API_KEY")
 
     @property
     def admin_email_list(self) -> list[str]:

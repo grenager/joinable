@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from joinable_api.rate_limit import limiter
-from joinable_api.routers import admin, bookmarks, categories, events
+from joinable_api.routers import admin, bookmarks, categories, events, geocode
 
 
 @asynccontextmanager
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
         return HealthResponse(status="ok")
 
     app.include_router(events.router, prefix="/v1")
+    app.include_router(geocode.router, prefix="/v1")
     app.include_router(categories.router, prefix="/v1")
     app.include_router(bookmarks.router, prefix="/v1")
     app.include_router(admin.router, prefix="/v1")

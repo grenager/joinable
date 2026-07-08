@@ -8,6 +8,7 @@ import {
 } from "./api";
 import { getSession, getSupabase, signInWithGoogle, signOut } from "./auth";
 import { EventCard } from "./components/EventCard";
+import { LocationPicker } from "./components/LocationPicker";
 import { SearchBar } from "./components/SearchBar";
 import type { Event, GeoLocation, SearchFilters } from "./types";
 import { SF_BAY_DEFAULT } from "./types";
@@ -28,7 +29,7 @@ function datePresetToStart(preset: SearchFilters["datePreset"]): string | undefi
 
 export default function App() {
   const [location, setLocation] = useState<GeoLocation>(SF_BAY_DEFAULT);
-  const [locationLabel, setLocationLabel] = useState<string>("SF Bay Area (default)");
+  const [locationLabel, setLocationLabel] = useState<string>("SF Bay Area");
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -45,10 +46,15 @@ export default function App() {
         setLocationLabel("Your location");
       },
       () => {
-        setLocationLabel("SF Bay Area (location unavailable)");
+        setLocationLabel("SF Bay Area");
       },
       { timeout: 8000 }
     );
+  }, []);
+
+  const handleLocationSelect = useCallback((loc: GeoLocation, label: string) => {
+    setLocation(loc);
+    setLocationLabel(label);
   }, []);
 
   useEffect(() => {
@@ -130,9 +136,9 @@ export default function App() {
     <div className="app">
       <header className="header">
         <img className="logo-img" src={logoUrl} alt="Joinable" />
-        <p className="tagline">Find live events near you</p>
+        <p className="tagline">All live events, everywhere</p>
         <div className="header-actions">
-          <span className="location-badge">{locationLabel}</span>
+          <LocationPicker label={locationLabel} onSelect={handleLocationSelect} />
           {session ? (
             <button type="button" className="auth-btn" onClick={() => void signOut()}>
               Sign out
