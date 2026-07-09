@@ -62,6 +62,8 @@ export interface SourceSelectors {
   description: string | null;
   date_format: string | null;
   url_attribute: string;
+  start_attribute: string | null;
+  end_attribute: string | null;
 }
 
 export type SourceType = "html_css" | "evvnt" | "cityspark" | "eventscom" | "tribe" | "localist";
@@ -111,6 +113,8 @@ export interface Source {
   default_category: string;
   render_js: boolean;
   last_scraped_at: string | null;
+  last_scrape_events_found: number | null;
+  last_scrape_events_new: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -126,6 +130,7 @@ export interface SourceInput {
   default_category: string;
   render_js: boolean;
   selectors: SourceSelectors;
+  html_css_raw_config: Record<string, unknown> | null;
   evvnt: EvvntConfig;
   cityspark: CitySparkConfig;
   eventscom: EventsComConfig;
@@ -158,6 +163,8 @@ export const EMPTY_SELECTORS: SourceSelectors = {
   description: null,
   date_format: null,
   url_attribute: "href",
+  start_attribute: null,
+  end_attribute: null,
 };
 
 export const EMPTY_EVVNT_CONFIG: EvvntConfig = {
@@ -203,6 +210,7 @@ export const EMPTY_SOURCE_INPUT: SourceInput = {
   default_category: "music",
   render_js: false,
   selectors: { ...EMPTY_SELECTORS },
+  html_css_raw_config: null,
   evvnt: { ...EMPTY_EVVNT_CONFIG },
   cityspark: { ...EMPTY_CITYSPARK_CONFIG },
   eventscom: { ...EMPTY_EVENTSCOM_CONFIG },

@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from celery import Celery
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
-from joinable_core.db import get_db_session
-from joinable_core.models import Source
+from joinable_core.db import get_db_session, get_sync_engine
+from joinable_core.models import ScrapeJob, ScrapeJobStatus, Source
+from joinable_core.scraper.pipeline import run_scrape_for_source
 from joinable_core.schemas import (
     RawScrapedEvent,
     ScrapeTestRequest,
@@ -25,25 +25,29 @@ from joinable_core.scraper.adapters.evvnt import detect_evvnt
 from joinable_core.scraper.adapters.localist import detect_localist, probe_localist_api
 from joinable_core.scraper.adapters.tribe import detect_tribe, probe_tribe_api
 from joinable_core.scraper.engine import ScrapeEngine
-from joinable_core.settings import get_settings
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from joinable_api.auth import AuthUser, get_admin_user
 
 router = APIRouter(prefix="/admin/sources", tags=["admin"])
 
 
-class QueuedScrapeResponse(BaseModel):
+class ScrapeRunResponse(BaseModel):
     source_id: UUID
-    status: str = "queued"
-    message: str = "Scrape job enqueued"
+    status: str
+    message: str
+    events_found: int | None = None
+    events_new: int | None = None
+    error: str | None = None
 
 
-def _get_celery() -> Celery:
-    settings = get_settings()
-    return Celery("joinable", broker=settings.redis_url, backend=settings.redis_url)
+def _run_sync_scrape(source_id: UUID) -> ScrapeJob:
+    engine = get_sync_engine()
+    with Session(engine) as sync_session:
+        return run_scrape_for_source(sync_session, source_id)
 
 
 def _validate_config(source_type: str, config: dict) -> dict:
@@ -74,13 +78,52 @@ def _build_test_response(events: list[RawScrapedEvent]) -> ScrapeTestResponse:
     return ScrapeTestResponse(events_found=len(events), sample=sample)
 
 
+def _source_to_response(source: Source, latest_job: ScrapeJob | None) -> SourceResponse:
+    base = SourceResponse.model_validate(source)
+    if latest_job is None:
+        return base
+    return base.model_copy(
+        update={
+            "last_scrape_events_found": latest_job.events_found,
+            "last_scrape_events_new": latest_job.events_new,
+        }
+    )
+
+
+async def _latest_successful_jobs_by_source(
+    session: AsyncSession, source_ids: list[UUID]
+) -> dict[UUID, ScrapeJob]:
+    if not source_ids:
+        return {}
+    row_num = func.row_number().over(
+        partition_by=ScrapeJob.source_id,
+        order_by=ScrapeJob.finished_at.desc().nullslast(),
+    )
+    ranked = (
+        select(ScrapeJob.id.label("job_id"), row_num.label("row_num"))
+        .where(
+            ScrapeJob.source_id.in_(source_ids),
+            ScrapeJob.status == ScrapeJobStatus.SUCCESS,
+        )
+        .subquery()
+    )
+    result = await session.execute(
+        select(ScrapeJob)
+        .join(ranked, ScrapeJob.id == ranked.c.job_id)
+        .where(ranked.c.row_num == 1)
+    )
+    return {job.source_id: job for job in result.scalars().all()}
+
+
 @router.get("", response_model=list[SourceResponse])
 async def list_sources(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     _: Annotated[AuthUser, Depends(get_admin_user)],
 ) -> list[SourceResponse]:
     result = await session.execute(select(Source).order_by(Source.name))
-    return [SourceResponse.model_validate(s) for s in result.scalars().all()]
+    sources = list(result.scalars().all())
+    jobs_by_source = await _latest_successful_jobs_by_source(session, [s.id for s in sources])
+    return [_source_to_response(source, jobs_by_source.get(source.id)) for source in sources]
 
 
 @router.post("", response_model=SourceResponse, status_code=status.HTTP_201_CREATED)
@@ -117,7 +160,8 @@ async def get_source(
     source = await session.get(Source, source_id)
     if source is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
-    return SourceResponse.model_validate(source)
+    jobs_by_source = await _latest_successful_jobs_by_source(session, [source_id])
+    return _source_to_response(source, jobs_by_source.get(source_id))
 
 
 @router.put("/{source_id}", response_model=SourceResponse)
@@ -143,10 +187,8 @@ async def update_source(
 
     await session.flush()
     await session.refresh(source)
-    return SourceResponse.model_validate(source)
-
-
-@router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+    jobs_by_source = await _latest_successful_jobs_by_source(session, [source_id])
+    return _source_to_response(source, jobs_by_source.get(source_id))
 async def delete_source(
     source_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -275,17 +317,34 @@ async def test_source(
     return _build_test_response(events)
 
 
-@router.post("/{source_id}/scrape", response_model=QueuedScrapeResponse)
+@router.post("/{source_id}/scrape", response_model=ScrapeRunResponse)
 async def trigger_scrape(
     source_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     _: Annotated[AuthUser, Depends(get_admin_user)],
-) -> QueuedScrapeResponse:
+) -> ScrapeRunResponse:
     source = await session.get(Source, source_id)
     if source is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
 
-    celery_app = _get_celery()
-    celery_app.send_task("joinable_worker.tasks.scrape_source", args=[str(source_id)])
+    try:
+        job = await run_in_threadpool(_run_sync_scrape, source_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Scrape failed: {exc}",
+        ) from exc
 
-    return QueuedScrapeResponse(source_id=source_id)
+    if job.status == ScrapeJobStatus.SUCCESS:
+        message = f"Scrape finished: {job.events_found} events ({job.events_new} new)"
+    else:
+        message = f"Scrape failed: {job.error or 'unknown error'}"
+
+    return ScrapeRunResponse(
+        source_id=source_id,
+        status=job.status.value,
+        message=message,
+        events_found=job.events_found,
+        events_new=job.events_new,
+        error=job.error,
+    )

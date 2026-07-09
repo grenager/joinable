@@ -17,7 +17,7 @@ import "./App.css";
 
 const DEFAULT_FILTERS: SearchFilters = {
   q: "",
-  category: "music",
+  category: "",
   datePreset: "all",
   radiusKm: 40,
 };

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from joinable_core.schemas import SourceSelectors
+from joinable_core.schemas import HtmlCssConfig
 from joinable_core.scraper.engine import ScrapeEngine
 
 if TYPE_CHECKING:
@@ -11,13 +11,13 @@ if TYPE_CHECKING:
 
 
 class HtmlCssAdapter:
-    """Fetch an HTML page and extract events using CSS selectors."""
+    """Fetch HTML calendar pages and extract events using declarative CSS config."""
 
     source_type = "html_css"
 
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
-        return SourceSelectors.model_validate(config).model_dump()
+        return HtmlCssConfig.from_raw(config).model_dump()
 
     def scrape(self, source: Source) -> list[RawScrapedEvent]:
-        selectors = SourceSelectors.model_validate(source.config)
-        return ScrapeEngine().scrape(source.url, selectors, render_js=source.render_js)
+        html_config = HtmlCssConfig.from_raw(source.config)
+        return ScrapeEngine().scrape_config(source.url, html_config, render_js=source.render_js)

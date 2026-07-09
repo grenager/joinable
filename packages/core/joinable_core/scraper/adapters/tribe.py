@@ -66,12 +66,18 @@ def _price_text(cost: str | None) -> str | None:
     return _strip_html(cost)
 
 
-def _category_name(categories: list[dict[str, Any]] | None) -> str | None:
+def _category_tags(categories: list[dict[str, Any]] | None) -> list[str]:
     if not categories:
-        return None
-    first = categories[0]
-    name = first.get("name") if isinstance(first, dict) else None
-    return str(name)[:64] if isinstance(name, str) else None
+        return []
+    tags: list[str] = []
+    for item in categories:
+        if not isinstance(item, dict):
+            continue
+        for key in ("name", "slug"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                tags.append(value.strip())
+    return tags
 
 
 def _to_raw_event(event: dict[str, Any]) -> RawScrapedEvent | None:
@@ -96,7 +102,7 @@ def _to_raw_event(event: dict[str, Any]) -> RawScrapedEvent | None:
         longitude=float(venue["geo_lng"]) if venue.get("geo_lng") is not None else None,
         address=str(venue["address"]) if venue.get("address") else None,
         city=str(venue["city"]) if venue.get("city") else None,
-        category=_category_name(event.get("categories")),
+        source_tags=_category_tags(event.get("categories")),
     )
 
 

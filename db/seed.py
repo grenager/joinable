@@ -133,6 +133,48 @@ SF_BAY_SOURCES: list[dict] = [
             "radius_miles": 25,
         },
     },
+    {
+        "name": "SF Funcheap",
+        "url": "https://sf.funcheap.com/events/san-francisco/",
+        "region": "SF Bay Area",
+        "timezone": "America/Los_Angeles",
+        "default_category": "community",
+        "config": {
+            "profiles": [
+                {
+                    "container": "div.left.blog",
+                    "title": ".entry-title a",
+                    "start": ".meta.date-time",
+                    "start_attribute": "data-event-date",
+                    "end": ".meta.date-time",
+                    "end_attribute": "data-event-date-end",
+                    "venue": ".meta.date-time > span:not([class])",
+                    "url": ".entry-title a",
+                    "image": ".thumbnail-wrapper noscript img",
+                    "price": ".cost",
+                    "date_format": "%Y-%m-%d %H:%M",
+                    "url_attribute": "href",
+                },
+                {
+                    "container": "tr[id^=\"post-\"]",
+                    "title": ".entry-title a",
+                    "start": {
+                        "combine": "{day} {time}",
+                        "parts": {
+                            "day": {"selector": "h2", "scope": "preceding", "match": "202"},
+                            "time": {"selector": "td:first-child", "scope": "container"},
+                        },
+                    },
+                    "url": ".entry-title a",
+                    "url_attribute": "href",
+                },
+            ],
+            "pagination": {
+                "next": "a.nextpostslink",
+                "max_pages": 4,
+            },
+        },
+    },
 ]
 
 # Demo events for local dev when scraping is unavailable

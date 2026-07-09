@@ -37,6 +37,10 @@ const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   localist: "Localist API",
 };
 
+function hasAdvancedHtmlCssConfig(config: Record<string, unknown>): boolean {
+  return Array.isArray(config.profiles) || config.pagination != null;
+}
+
 function configToSelectors(config: Record<string, unknown>): SourceSelectors {
   const result: SourceSelectors = { ...EMPTY_SELECTORS };
   for (const key of Object.keys(result) as (keyof SourceSelectors)[]) {
@@ -60,6 +64,7 @@ function sourceToInput(source: Source): SourceInput {
     default_category: source.default_category,
     render_js: source.render_js,
     selectors: { ...EMPTY_SELECTORS },
+    html_css_raw_config: null,
     evvnt: { ...EMPTY_EVVNT_CONFIG },
     cityspark: { ...EMPTY_CITYSPARK_CONFIG },
     eventscom: { ...EMPTY_EVENTSCOM_CONFIG },
@@ -119,6 +124,7 @@ function sourceToInput(source: Source): SourceInput {
       return {
         ...base,
         selectors: configToSelectors(source.config),
+        html_css_raw_config: hasAdvancedHtmlCssConfig(source.config) ? source.config : null,
       };
   }
 }
@@ -205,8 +211,19 @@ const SELECTOR_FIELDS: SelectorField[] = [
   { key: "price", label: "Price", placeholder: ".price", required: false },
   { key: "description", label: "Description", placeholder: ".summary", required: false },
   { key: "date_format", label: "Date format", placeholder: "%b %d, %Y %I:%M %p", required: false },
+  { key: "start_attribute", label: "Start attribute", placeholder: "data-event-date", required: false },
+  { key: "end_attribute", label: "End attribute", placeholder: "data-event-date-end", required: false },
   { key: "url_attribute", label: "URL attribute", placeholder: "href", required: false },
 ];
+
+function formatLastScrape(source: Source): string {
+  if (!source.last_scraped_at) return "—";
+  const when = new Date(source.last_scraped_at).toLocaleString();
+  if (source.last_scrape_events_found == null) return when;
+  const total = source.last_scrape_events_found;
+  const newCount = source.last_scrape_events_new ?? 0;
+  return `${when} · ${total} found (${newCount} new)`;
+}
 
 export function AdminPage() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
@@ -397,13 +414,14 @@ export function AdminPage() {
     setError(null);
     try {
       const result = await triggerScrape(token, source.id);
-      setNotice(`Scrape ${result.status} for "${source.name}".`);
+      if (result.status === "success") {
+        setNotice(`${source.name}: ${result.message}`);
+      } else {
+        setError(`${source.name}: ${result.message}`);
+      }
+      await load(token);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? `Could not queue scrape (worker/Redis may be offline): ${err.message}`
-          : "Failed to queue scrape"
-      );
+      setError(err instanceof Error ? err.message : "Failed to run scrape");
     }
   };
 
@@ -472,10 +490,9 @@ export function AdminPage() {
               <th>Name</th>
               <th>URL</th>
               <th>Type</th>
-              <th>Category</th>
               <th>Enabled</th>
               <th>Every</th>
-              <th>Last scraped</th>
+              <th>Last scrape</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -489,10 +506,9 @@ export function AdminPage() {
                   </a>
                 </td>
                 <td>{SOURCE_TYPE_LABELS[s.source_type] ?? s.source_type}</td>
-                <td>{s.default_category}</td>
                 <td>{s.enabled ? "Yes" : "No"}</td>
                 <td>{s.scrape_frequency_minutes}m</td>
-                <td>{s.last_scraped_at ? new Date(s.last_scraped_at).toLocaleString() : "—"}</td>
+                <td>{formatLastScrape(s)}</td>
                 <td className="admin-actions">
                   <IconButton label="Edit" onClick={() => openEdit(s)}>
                     <IconEdit />
@@ -528,13 +544,6 @@ export function AdminPage() {
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </label>
-              <label>
-                Default category
-                <input
-                  value={form.default_category}
-                  onChange={(e) => setForm({ ...form, default_category: e.target.value })}
                 />
               </label>
               <label className="admin-form-wide">

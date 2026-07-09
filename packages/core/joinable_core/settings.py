@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     scrapingbee_api_key: str = Field(default="", alias="SCRAPINGBEE_API_KEY")
     scrapingbee_premium_proxy: bool = Field(default=True, alias="SCRAPINGBEE_PREMIUM_PROXY")
     scrapingbee_country_code: str = Field(default="us", alias="SCRAPINGBEE_COUNTRY_CODE")
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
+    category_llm_batch_size: int = Field(default=25, alias="CATEGORY_LLM_BATCH_SIZE")
 
     @property
     def admin_email_list(self) -> list[str]:

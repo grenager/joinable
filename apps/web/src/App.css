@@ -190,6 +190,21 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
+.event-card-clickable {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.event-card-clickable:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.event-card-clickable:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
 .event-card-body {
   padding: 1rem 1.25rem;
 }
@@ -255,6 +270,117 @@ body {
   margin: 0.5rem 0 0;
   font-size: 0.875rem;
   color: #475569;
+}
+
+.detail-back-link {
+  font-size: 0.9rem;
+  color: #64748b;
+  text-decoration: none;
+  margin-right: 0.25rem;
+}
+
+.detail-back-link:hover {
+  color: #4338ca;
+}
+
+.event-detail {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.event-detail-card {
+  background: white;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.event-detail-image {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  background: #e2e8f0;
+}
+
+.event-detail-body {
+  padding: 1.5rem 1.75rem 2rem;
+}
+
+.event-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.event-detail-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.event-detail-datetime {
+  margin: 0.75rem 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.event-detail-time {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+.event-detail-venue {
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.event-detail-description {
+  margin: 1.25rem 0 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.event-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+.detail-action-btn {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #1e293b;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.detail-action-btn:hover {
+  background: #f1f5f9;
+}
+
+.detail-action-btn-primary {
+  background: #4338ca;
+  border-color: #4338ca;
+  color: white;
+}
+
+.detail-action-btn-primary:hover {
+  background: #3730a3;
 }
 
 .admin-link {

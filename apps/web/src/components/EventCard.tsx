@@ -1,3 +1,4 @@
+import type { KeyboardEvent, MouseEvent } from "react";
 import type { Event } from "../types";
 
 interface EventCardProps {
@@ -26,8 +27,29 @@ export function EventCard({
   onUnbookmark,
   isLoggedIn,
 }: EventCardProps) {
+  const detailHref = `#/events/${event.id}`;
+
+  const handleCardClick = (e: MouseEvent<HTMLElement>): void => {
+    if ((e.target as HTMLElement).closest(".bookmark-btn")) return;
+    window.location.hash = detailHref;
+  };
+
+  const handleCardKeyDown = (e: KeyboardEvent<HTMLElement>): void => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if ((e.target as HTMLElement).closest(".bookmark-btn")) return;
+    e.preventDefault();
+    window.location.hash = detailHref;
+  };
+
   return (
-    <article className="event-card">
+    <article
+      className="event-card event-card-clickable"
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      role="link"
+      tabIndex={0}
+      aria-label={`View details for ${event.title}`}
+    >
       {event.image_url && (
         <img
           className="event-image"
@@ -38,22 +60,15 @@ export function EventCard({
       )}
       <div className="event-card-body">
         <div className="event-card-header">
-          <h2 className="event-title">
-            {event.external_url ? (
-              <a href={event.external_url} target="_blank" rel="noopener noreferrer">
-                {event.title}
-              </a>
-            ) : (
-              event.title
-            )}
-          </h2>
+          <h2 className="event-title">{event.title}</h2>
           {isLoggedIn && (
             <button
               type="button"
               className={`bookmark-btn ${isBookmarked ? "bookmarked" : ""}`}
-              onClick={() =>
-                isBookmarked ? onUnbookmark(event.id) : onBookmark(event.id)
-              }
+              onClick={(e) => {
+                e.stopPropagation();
+                isBookmarked ? onUnbookmark(event.id) : onBookmark(event.id);
+              }}
               aria-label={isBookmarked ? "Remove bookmark" : "Bookmark event"}
             >
               {isBookmarked ? "★" : "☆"}

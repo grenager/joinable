@@ -1,11 +1,34 @@
-import type { DatePreset, SearchFilters } from "../types";
+import { useEffect, useState } from "react";
+import { fetchCategories } from "../api";
+import type { Category, DatePreset, SearchFilters } from "../types";
 
 interface SearchBarProps {
   filters: SearchFilters;
   onChange: (filters: SearchFilters) => void;
 }
 
+const FALLBACK_CATEGORIES: Category[] = [
+  { id: "music", label: "Live Music" },
+  { id: "comedy", label: "Comedy" },
+  { id: "theater", label: "Theater & Performance" },
+  { id: "food_drink", label: "Food & Drink" },
+  { id: "sports", label: "Sports & Fitness" },
+  { id: "arts", label: "Arts & Museums" },
+  { id: "community", label: "Community" },
+  { id: "other", label: "Other" },
+];
+
 export function SearchBar({ filters, onChange }: SearchBarProps) {
+  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
+
+  useEffect(() => {
+    void fetchCategories()
+      .then(setCategories)
+      .catch(() => {
+        // keep fallback list
+      });
+  }, []);
+
   return (
     <div className="search-bar">
       <input
@@ -20,14 +43,12 @@ export function SearchBar({ filters, onChange }: SearchBarProps) {
         onChange={(e) => onChange({ ...filters, category: e.target.value })}
         className="search-select"
       >
-        <option value="music">Live Music</option>
-        <option value="comedy">Comedy</option>
-        <option value="theater">Theater</option>
-        <option value="food">Food & Drink</option>
-        <option value="sports">Sports</option>
-        <option value="arts">Arts & Culture</option>
-        <option value="community">Community</option>
         <option value="">All Categories</option>
+        {categories.map((category) => (
+          <option key={category.id} value={category.id}>
+            {category.label}
+          </option>
+        ))}
       </select>
       <select
         value={filters.datePreset}

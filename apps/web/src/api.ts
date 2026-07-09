@@ -38,6 +38,16 @@ export async function fetchEvents(params: FetchEventsParams): Promise<EventListR
   return response.json() as Promise<EventListResponse>;
 }
 
+export async function fetchEvent(eventId: string): Promise<Event> {
+  const response = await fetch(`${API_URL}/v1/events/${eventId}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch event: ${response.status}`);
+  }
+  return response.json() as Promise<Event>;
+}
+
 export interface GeocodeResult {
   lat: number;
   lng: number;

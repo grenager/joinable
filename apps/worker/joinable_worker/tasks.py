@@ -25,6 +25,7 @@ def scrape_source(self, source_id: str) -> dict[str, str | int]:
                 "job_id": str(job.id),
                 "status": job.status.value,
                 "events_found": job.events_found,
+                "events_new": job.events_new,
                 "error": job.error or "",
             }
         except Exception as exc:

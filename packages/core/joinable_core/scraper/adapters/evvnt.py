@@ -78,11 +78,10 @@ def _to_raw_event(event: dict[str, Any]) -> RawScrapedEvent | None:
     address_parts = [venue.get("address_1"), venue.get("address_2")] if venue else []
     address = ", ".join(p for p in address_parts if p) or None
 
-    category = event.get("category_name")
-    if isinstance(category, str):
-        category = category[:64]
-    else:
-        category = None
+    category_name = event.get("category_name")
+    source_tags: list[str] = []
+    if isinstance(category_name, str) and category_name.strip():
+        source_tags.append(category_name.strip())
 
     return RawScrapedEvent(
         title=str(title),
@@ -97,7 +96,7 @@ def _to_raw_event(event: dict[str, Any]) -> RawScrapedEvent | None:
         longitude=float(longitude) if longitude is not None else None,
         address=address,
         city=venue.get("town") if venue else None,
-        category=category,
+        source_tags=source_tags,
     )
 
 

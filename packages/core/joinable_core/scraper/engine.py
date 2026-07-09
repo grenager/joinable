@@ -5,8 +5,10 @@ import logging
 import httpx
 from bs4 import BeautifulSoup
 
-from joinable_core.schemas import RawScrapedEvent, SourceSelectors
-from joinable_core.scraper.normalize import extract_attr, extract_text, resolve_url
+from joinable_core.schemas import HtmlCssConfig, RawScrapedEvent, SourceProfile, SourceSelectors
+from joinable_core.scraper.classifier import tags_from_html_classes
+from joinable_core.scraper.fields import extract_field
+from joinable_core.scraper.normalize import extract_attr, resolve_url
 from joinable_core.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -54,30 +56,46 @@ class ScrapeEngine:
             return self._fetch_via_scrapingbee(url, render_js)
         return self._fetch_direct(url)
 
-    def parse(self, html: str, base_url: str, selectors: SourceSelectors) -> list[RawScrapedEvent]:
+    def parse_profile(
+        self, html: str, base_url: str, profile: SourceProfile
+    ) -> list[RawScrapedEvent]:
         soup = BeautifulSoup(html, "lxml")
-        containers = soup.select(selectors.container)
+        containers = soup.select(profile.container)
         events: list[RawScrapedEvent] = []
 
         for container in containers:
-            title = extract_text(container, selectors.title)
-            start_raw = extract_text(container, selectors.start)
+            title = extract_field(container, profile.title)
+            start_raw = extract_field(
+                container,
+                profile.start,
+                legacy_attribute=profile.start_attribute if isinstance(profile.start, str) else None,
+            )
             if not title or not start_raw:
                 continue
 
-            end_raw = extract_text(container, selectors.end) if selectors.end else None
-            venue_name = extract_text(container, selectors.venue) if selectors.venue else None
-            description = extract_text(container, selectors.description) if selectors.description else None
-            price_text = extract_text(container, selectors.price) if selectors.price else None
+            end_raw = extract_field(
+                container,
+                profile.end,
+                legacy_attribute=profile.end_attribute if isinstance(profile.end, str) else None,
+            )
+            venue_name = extract_field(container, profile.venue)
+            description = extract_field(container, profile.description)
+            price_text = extract_field(container, profile.price)
 
             external_url: str | None = None
-            if selectors.url:
-                href = extract_attr(container, selectors.url, selectors.url_attribute)
+            if profile.url is not None:
+                if isinstance(profile.url, str):
+                    href = extract_attr(container, profile.url, profile.url_attribute)
+                else:
+                    href = extract_field(container, profile.url)
                 external_url = resolve_url(base_url, href)
 
             image_url: str | None = None
-            if selectors.image:
-                image_url = extract_attr(container, selectors.image, "src")
+            if profile.image is not None:
+                if isinstance(profile.image, str):
+                    image_url = extract_attr(container, profile.image, "src")
+                else:
+                    image_url = extract_field(container, profile.image)
                 if image_url:
                     image_url = resolve_url(base_url, image_url)
 
@@ -91,13 +109,62 @@ class ScrapeEngine:
                     image_url=image_url,
                     price_text=price_text,
                     description=description,
+                    date_format=profile.date_format,
+                    source_tags=tags_from_html_classes(container),
                 )
             )
 
         return events
 
+    def parse(self, html: str, base_url: str, selectors: SourceSelectors) -> list[RawScrapedEvent]:
+        profile = SourceProfile.model_validate(selectors.model_dump())
+        return self.parse_profile(html, base_url, profile)
+
+    @staticmethod
+    def dedupe_events(events: list[RawScrapedEvent]) -> list[RawScrapedEvent]:
+        seen: set[str] = set()
+        unique: list[RawScrapedEvent] = []
+        for event in events:
+            key = event.external_url or f"{event.title}|{event.start_raw}"
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(event)
+        return unique
+
+    def _next_page_url(self, html: str, base_url: str, config: HtmlCssConfig) -> str | None:
+        if config.pagination is None:
+            return None
+        soup = BeautifulSoup(html, "lxml")
+        link = soup.select_one(config.pagination.next)
+        if link is None:
+            return None
+        href = link.get(config.pagination.url_attribute)
+        if not isinstance(href, str) or not href.strip():
+            return None
+        return resolve_url(base_url, href.strip())
+
+    def scrape_config(
+        self, url: str, config: HtmlCssConfig, render_js: bool = False
+    ) -> list[RawScrapedEvent]:
+        max_pages = config.pagination.max_pages if config.pagination is not None else 1
+        all_events: list[RawScrapedEvent] = []
+        page_url: str | None = url
+        pages_fetched = 0
+
+        while page_url is not None and pages_fetched < max_pages:
+            html = self.fetch_html(page_url, render_js=render_js)
+            for profile in config.profiles:
+                all_events.extend(self.parse_profile(html, page_url, profile))
+            pages_fetched += 1
+            if config.pagination is None or pages_fetched >= max_pages:
+                break
+            page_url = self._next_page_url(html, page_url, config)
+
+        return self.dedupe_events(all_events)
+
     def scrape(
         self, url: str, selectors: SourceSelectors, render_js: bool = False
     ) -> list[RawScrapedEvent]:
-        html = self.fetch_html(url, render_js=render_js)
-        return self.parse(html, url, selectors)
+        config = HtmlCssConfig.from_raw(selectors.model_dump())
+        return self.scrape_config(url, config, render_js=render_js)

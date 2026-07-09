@@ -30,15 +30,16 @@ def main() -> None:
                 ).scalars()
             ]
 
-        if not source_ids:
-            print("No enabled sources found. Run `uv run python db/seed.py` first.")
-            return
+    if not source_ids:
+        print("No enabled sources found. Run `uv run python db/seed.py` first.")
+        return
 
-        for source_id in source_ids:
+    for source_id in source_ids:
+        with Session(engine) as session:
             job = run_scrape_for_source(session, source_id)
             print(
                 f"[{job.status.value}] source={source_id} "
-                f"events_found={job.events_found} error={job.error or '-'}"
+                f"events_found={job.events_found} events_new={job.events_new} error={job.error or '-'}"
             )
 
 

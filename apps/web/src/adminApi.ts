@@ -7,6 +7,10 @@ import type {
 
 const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
+function hasAdvancedHtmlCssConfig(config: Record<string, unknown>): boolean {
+  return Array.isArray(config.profiles) || config.pagination != null;
+}
+
 export function buildConfig(input: SourceInput): Record<string, unknown> {
   switch (input.source_type) {
     case "evvnt":
@@ -42,6 +46,9 @@ export function buildConfig(input: SourceInput): Record<string, unknown> {
         pp: input.localist.pp,
       };
     default:
+      if (input.html_css_raw_config && hasAdvancedHtmlCssConfig(input.html_css_raw_config)) {
+        return input.html_css_raw_config;
+      }
       return { ...input.selectors };
   }
 }
@@ -177,17 +184,20 @@ export async function testSource(token: string, id: string): Promise<ScrapeTestR
   return response.json() as Promise<ScrapeTestResult>;
 }
 
-export interface QueuedScrapeResult {
+export interface ScrapeRunResult {
   source_id: string;
   status: string;
   message: string;
+  events_found: number | null;
+  events_new: number | null;
+  error: string | null;
 }
 
-export async function triggerScrape(token: string, id: string): Promise<QueuedScrapeResult> {
+export async function triggerScrape(token: string, id: string): Promise<ScrapeRunResult> {
   const response = await fetch(`${API_URL}/v1/admin/sources/${id}/scrape`, {
     method: "POST",
     headers: authHeaders(token),
   });
   if (!response.ok) return parseError(response);
-  return response.json() as Promise<QueuedScrapeResult>;
+  return response.json() as Promise<ScrapeRunResult>;
 }

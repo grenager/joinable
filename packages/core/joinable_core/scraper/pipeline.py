@@ -10,9 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from joinable_core.categories import DEFAULT_CATEGORY_ID, is_valid_category_id
 from joinable_core.models import Event, ScrapeJob, ScrapeJobStatus, Source, Venue
 from joinable_core.schemas import RawScrapedEvent
 from joinable_core.scraper.adapters import get_adapter
+from joinable_core.scraper.classifier import assign_categories
 from joinable_core.scraper.dedupe import compute_dedupe_hash
 from joinable_core.scraper.geocode import Geocoder
 from joinable_core.scraper.normalize import parse_event_datetime
@@ -68,18 +70,28 @@ def _upsert_event(
     source: Source,
     raw: RawScrapedEvent,
     venue: Venue | None,
-) -> bool:
-    date_format = source.config.get("date_format")
+) -> tuple[bool, bool]:
+    """Return (saved, is_new). saved is False when date parsing fails."""
+    date_format = raw.date_format or source.config.get("date_format")
     start_time = parse_event_datetime(raw.start_raw, source.timezone, date_format)
     if start_time is None:
-        return False
+        return False, False
 
     end_time = None
     if raw.end_raw:
         end_time = parse_event_datetime(raw.end_raw, source.timezone, date_format)
 
     dedupe_hash = compute_dedupe_hash(raw.title, start_time.isoformat(), raw.venue_name)
+    is_new = (
+        session.execute(select(Event.id).where(Event.dedupe_hash == dedupe_hash)).scalar_one_or_none()
+        is None
+    )
     now = datetime.now(tz=UTC)
+    category = (
+        raw.category
+        if raw.category is not None and is_valid_category_id(raw.category)
+        else DEFAULT_CATEGORY_ID
+    )
 
     stmt = insert(Event).values(
         source_id=source.id,
@@ -89,10 +101,10 @@ def _upsert_event(
         description=raw.description,
         start_time=start_time,
         end_time=end_time,
-        category=raw.category or source.default_category,
+        category=category,
         external_url=raw.external_url,
         image_url=raw.image_url,
-        price_text=raw.price_text,
+        price_text=raw.price_text[:128] if raw.price_text else None,
         created_at=now,
         updated_at=now,
     )
@@ -103,6 +115,7 @@ def _upsert_event(
             "description": stmt.excluded.description,
             "start_time": stmt.excluded.start_time,
             "end_time": stmt.excluded.end_time,
+            "category": stmt.excluded.category,
             "external_url": stmt.excluded.external_url,
             "image_url": stmt.excluded.image_url,
             "price_text": stmt.excluded.price_text,
@@ -111,7 +124,7 @@ def _upsert_event(
         },
     )
     session.execute(stmt)
-    return True
+    return True, is_new
 
 
 def run_scrape_for_source(session: Session, source_id: UUID) -> ScrapeJob:
@@ -130,23 +143,37 @@ def run_scrape_for_source(session: Session, source_id: UUID) -> ScrapeJob:
     adapter = get_adapter(source.source_type)
     geocoder = Geocoder()
     events_found = 0
+    events_new = 0
 
     try:
         raw_events = adapter.scrape(source)
+        assign_categories(raw_events)
         for raw in raw_events:
             venue = _get_or_create_venue(session, geocoder, raw, source.region)
-            if _upsert_event(session, source, raw, venue):
+            saved, is_new = _upsert_event(session, source, raw, venue)
+            if saved:
                 events_found += 1
+                if is_new:
+                    events_new += 1
 
         source.last_scraped_at = datetime.now(tz=UTC)
         job.status = ScrapeJobStatus.SUCCESS
         job.events_found = events_found
+        job.events_new = events_new
         job.finished_at = datetime.now(tz=UTC)
     except Exception as exc:
         logger.exception("Scrape failed for source %s", source_id)
-        job.status = ScrapeJobStatus.FAILED
-        job.error = str(exc)
-        job.finished_at = datetime.now(tz=UTC)
+        session.rollback()
+        job = ScrapeJob(
+            source_id=source.id,
+            status=ScrapeJobStatus.FAILED,
+            started_at=datetime.now(tz=UTC),
+            finished_at=datetime.now(tz=UTC),
+            events_found=events_found,
+            events_new=events_new,
+            error=str(exc),
+        )
+        session.add(job)
 
     session.commit()
     session.refresh(job)
