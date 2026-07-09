@@ -19,7 +19,11 @@ from joinable_core.schemas import (
     SourceUpdate,
 )
 from joinable_core.scraper.adapters import get_adapter
+from joinable_core.scraper.adapters.cityspark import detect_cityspark
+from joinable_core.scraper.adapters.eventscom import detect_eventscom
 from joinable_core.scraper.adapters.evvnt import detect_evvnt
+from joinable_core.scraper.adapters.localist import detect_localist, probe_localist_api
+from joinable_core.scraper.adapters.tribe import detect_tribe, probe_tribe_api
 from joinable_core.scraper.engine import ScrapeEngine
 from joinable_core.settings import get_settings
 from pydantic import BaseModel
@@ -168,12 +172,50 @@ async def detect_source(
             detail=f"Could not fetch URL: {exc}",
         ) from exc
 
+    page_url = str(body.url)
+
     evvnt = detect_evvnt(html)
     if evvnt is not None:
         return SourceDetectResponse(
             source_type="evvnt",
             config=evvnt.model_dump(),
             detail=f"Detected evvnt discovery API (publisher_id={evvnt.publisher_id}).",
+        )
+
+    cityspark = detect_cityspark(html)
+    if cityspark is not None:
+        return SourceDetectResponse(
+            source_type="cityspark",
+            config=cityspark.model_dump(),
+            detail=f"Detected CitySpark portal (slug={cityspark.portal_slug}).",
+        )
+
+    eventscom = detect_eventscom(html)
+    if eventscom is not None:
+        return SourceDetectResponse(
+            source_type="eventscom",
+            config=eventscom.model_dump(),
+            detail="Detected Events.com calendar widget.",
+        )
+
+    tribe = detect_tribe(html, page_url)
+    if tribe is None:
+        tribe = await run_in_threadpool(probe_tribe_api, page_url)
+    if tribe is not None:
+        return SourceDetectResponse(
+            source_type="tribe",
+            config=tribe.model_dump(),
+            detail=f"Detected The Events Calendar REST API ({tribe.base_url}).",
+        )
+
+    localist = detect_localist(html, page_url)
+    if localist is None:
+        localist = await run_in_threadpool(probe_localist_api, page_url)
+    if localist is not None:
+        return SourceDetectResponse(
+            source_type="localist",
+            config=localist.model_dump(),
+            detail=f"Detected Localist calendar API ({localist.calendar_url}).",
         )
 
     return SourceDetectResponse(

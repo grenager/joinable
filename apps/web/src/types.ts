@@ -64,11 +64,38 @@ export interface SourceSelectors {
   url_attribute: string;
 }
 
-export type SourceType = "html_css" | "evvnt";
+export type SourceType = "html_css" | "evvnt" | "cityspark" | "eventscom" | "tribe" | "localist";
 
 export interface EvvntConfig {
   publisher_id: number;
   hits_per_page: number;
+}
+
+export interface CitySparkConfig {
+  portal_slug: string;
+  latitude: number;
+  longitude: number;
+  distance_miles: number;
+  days_ahead: number;
+  events_per_day: number;
+}
+
+export interface EventsComConfig {
+  calendar_token: string;
+  days_ahead: number;
+  radius_miles: number;
+}
+
+export interface TribeConfig {
+  base_url: string;
+  days_ahead: number;
+  per_page: number;
+}
+
+export interface LocalistConfig {
+  calendar_url: string;
+  days: number;
+  pp: number;
 }
 
 export interface Source {
@@ -100,6 +127,10 @@ export interface SourceInput {
   render_js: boolean;
   selectors: SourceSelectors;
   evvnt: EvvntConfig;
+  cityspark: CitySparkConfig;
+  eventscom: EventsComConfig;
+  tribe: TribeConfig;
+  localist: LocalistConfig;
 }
 
 export interface ScrapeTestSample {
@@ -134,6 +165,33 @@ export const EMPTY_EVVNT_CONFIG: EvvntConfig = {
   hits_per_page: 50,
 };
 
+export const EMPTY_CITYSPARK_CONFIG: CitySparkConfig = {
+  portal_slug: "",
+  latitude: 0,
+  longitude: 0,
+  distance_miles: 25,
+  days_ahead: 30,
+  events_per_day: 50,
+};
+
+export const EMPTY_EVENTSCOM_CONFIG: EventsComConfig = {
+  calendar_token: "",
+  days_ahead: 30,
+  radius_miles: 25,
+};
+
+export const EMPTY_TRIBE_CONFIG: TribeConfig = {
+  base_url: "",
+  days_ahead: 90,
+  per_page: 100,
+};
+
+export const EMPTY_LOCALIST_CONFIG: LocalistConfig = {
+  calendar_url: "",
+  days: 90,
+  pp: 100,
+};
+
 export const EMPTY_SOURCE_INPUT: SourceInput = {
   name: "",
   url: "",
@@ -146,4 +204,8 @@ export const EMPTY_SOURCE_INPUT: SourceInput = {
   render_js: false,
   selectors: { ...EMPTY_SELECTORS },
   evvnt: { ...EMPTY_EVVNT_CONFIG },
+  cityspark: { ...EMPTY_CITYSPARK_CONFIG },
+  eventscom: { ...EMPTY_EVENTSCOM_CONFIG },
+  tribe: { ...EMPTY_TRIBE_CONFIG },
+  localist: { ...EMPTY_LOCALIST_CONFIG },
 };

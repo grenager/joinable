@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   AdminApiError,
   createSource,
@@ -11,9 +11,13 @@ import {
   updateSource,
 } from "../adminApi";
 import {
+  EMPTY_CITYSPARK_CONFIG,
+  EMPTY_EVENTSCOM_CONFIG,
   EMPTY_EVVNT_CONFIG,
+  EMPTY_LOCALIST_CONFIG,
   EMPTY_SELECTORS,
   EMPTY_SOURCE_INPUT,
+  EMPTY_TRIBE_CONFIG,
   type ScrapeTestResult,
   type Source,
   type SourceInput,
@@ -27,6 +31,10 @@ const TOKEN_KEY = "joinable_admin_token";
 const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   html_css: "HTML + CSS",
   evvnt: "evvnt API",
+  cityspark: "CitySpark API",
+  eventscom: "Events.com API",
+  tribe: "The Events Calendar",
+  localist: "Localist API",
 };
 
 function configToSelectors(config: Record<string, unknown>): SourceSelectors {
@@ -41,8 +49,7 @@ function configToSelectors(config: Record<string, unknown>): SourceSelectors {
 }
 
 function sourceToInput(source: Source): SourceInput {
-  const isEvvnt = source.source_type === "evvnt";
-  return {
+  const base: SourceInput = {
     name: source.name,
     url: source.url,
     source_type: source.source_type,
@@ -52,14 +59,132 @@ function sourceToInput(source: Source): SourceInput {
     scrape_frequency_minutes: source.scrape_frequency_minutes,
     default_category: source.default_category,
     render_js: source.render_js,
-    selectors: isEvvnt ? { ...EMPTY_SELECTORS } : configToSelectors(source.config),
-    evvnt: isEvvnt
-      ? {
+    selectors: { ...EMPTY_SELECTORS },
+    evvnt: { ...EMPTY_EVVNT_CONFIG },
+    cityspark: { ...EMPTY_CITYSPARK_CONFIG },
+    eventscom: { ...EMPTY_EVENTSCOM_CONFIG },
+    tribe: { ...EMPTY_TRIBE_CONFIG },
+    localist: { ...EMPTY_LOCALIST_CONFIG },
+  };
+
+  switch (source.source_type) {
+    case "evvnt":
+      return {
+        ...base,
+        evvnt: {
           publisher_id: Number(source.config.publisher_id) || 0,
           hits_per_page: Number(source.config.hits_per_page) || 50,
-        }
-      : { ...EMPTY_EVVNT_CONFIG },
+        },
+      };
+    case "cityspark":
+      return {
+        ...base,
+        cityspark: {
+          portal_slug: String(source.config.portal_slug ?? ""),
+          latitude: Number(source.config.latitude) || 0,
+          longitude: Number(source.config.longitude) || 0,
+          distance_miles: Number(source.config.distance_miles) || 25,
+          days_ahead: Number(source.config.days_ahead) || 30,
+          events_per_day: Number(source.config.events_per_day) || 50,
+        },
+      };
+    case "eventscom":
+      return {
+        ...base,
+        eventscom: {
+          calendar_token: String(source.config.calendar_token ?? ""),
+          days_ahead: Number(source.config.days_ahead) || 30,
+          radius_miles: Number(source.config.radius_miles) || 25,
+        },
+      };
+    case "tribe":
+      return {
+        ...base,
+        tribe: {
+          base_url: String(source.config.base_url ?? ""),
+          days_ahead: Number(source.config.days_ahead) || 90,
+          per_page: Number(source.config.per_page) || 100,
+        },
+      };
+    case "localist":
+      return {
+        ...base,
+        localist: {
+          calendar_url: String(source.config.calendar_url ?? ""),
+          days: Number(source.config.days) || 90,
+          pp: Number(source.config.pp) || 100,
+        },
+      };
+    default:
+      return {
+        ...base,
+        selectors: configToSelectors(source.config),
+      };
+  }
+}
+
+function applyDetectedConfig(
+  prev: SourceInput,
+  sourceType: SourceType,
+  config: Record<string, unknown>
+): SourceInput {
+  const next: SourceInput = {
+    ...prev,
+    source_type: sourceType,
+    selectors: sourceType === "html_css" ? configToSelectors(config) : prev.selectors,
   };
+
+  switch (sourceType) {
+    case "evvnt":
+      return {
+        ...next,
+        evvnt: {
+          publisher_id: Number(config.publisher_id) || 0,
+          hits_per_page: Number(config.hits_per_page) || 50,
+        },
+      };
+    case "cityspark":
+      return {
+        ...next,
+        cityspark: {
+          portal_slug: String(config.portal_slug ?? prev.cityspark.portal_slug),
+          latitude: Number(config.latitude) || prev.cityspark.latitude || 0,
+          longitude: Number(config.longitude) || prev.cityspark.longitude || 0,
+          distance_miles: Number(config.distance_miles) || prev.cityspark.distance_miles,
+          days_ahead: Number(config.days_ahead) || prev.cityspark.days_ahead,
+          events_per_day: Number(config.events_per_day) || prev.cityspark.events_per_day,
+        },
+      };
+    case "eventscom":
+      return {
+        ...next,
+        eventscom: {
+          calendar_token: String(config.calendar_token ?? ""),
+          days_ahead: Number(config.days_ahead) || 30,
+          radius_miles: Number(config.radius_miles) || 25,
+        },
+      };
+    case "tribe":
+      return {
+        ...next,
+        tribe: {
+          base_url: String(config.base_url ?? prev.url),
+          days_ahead: Number(config.days_ahead) || 90,
+          per_page: Number(config.per_page) || 100,
+        },
+      };
+    case "localist":
+      return {
+        ...next,
+        localist: {
+          calendar_url: String(config.calendar_url ?? prev.url),
+          days: Number(config.days) || 90,
+          pp: Number(config.pp) || 100,
+        },
+      };
+    default:
+      return next;
+  }
 }
 
 interface SelectorField {
@@ -106,6 +231,7 @@ export function AdminPage() {
     null
   );
   const [savedTestOpen, setSavedTestOpen] = useState<boolean>(false);
+  const [testingSourceId, setTestingSourceId] = useState<string | null>(null);
 
   const load = useCallback(async (t: string) => {
     setLoading(true);
@@ -145,11 +271,7 @@ export function AdminPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({
-      ...EMPTY_SOURCE_INPUT,
-      selectors: { ...EMPTY_SELECTORS },
-      evvnt: { ...EMPTY_EVVNT_CONFIG },
-    });
+    setForm({ ...EMPTY_SOURCE_INPUT });
     setTestResult(null);
     setTestError(null);
     setDetectMsg(null);
@@ -228,20 +350,8 @@ export function AdminPage() {
     try {
       const result = await detectSource(token, form.url);
       setForm((prev) => ({
-        ...prev,
-        source_type: result.source_type,
+        ...applyDetectedConfig(prev, result.source_type, result.config),
         render_js: result.render_js,
-        selectors:
-          result.source_type === "evvnt"
-            ? prev.selectors
-            : configToSelectors(result.config),
-        evvnt:
-          result.source_type === "evvnt"
-            ? {
-                publisher_id: Number(result.config.publisher_id) || 0,
-                hits_per_page: Number(result.config.hits_per_page) || 50,
-              }
-            : prev.evvnt,
       }));
       setDetectMsg(result.detail);
     } catch (err) {
@@ -252,15 +362,19 @@ export function AdminPage() {
   };
 
   const runSavedTest = async (source: Source) => {
-    if (!token) return;
+    if (!token || testingSourceId !== null) return;
     setNotice(null);
     setError(null);
-    setSavedTest(null);
+    setTestingSourceId(source.id);
     try {
       const result = await testSource(token, source.id);
       setSavedTest({ name: source.name, result });
+      setSavedTestOpen(true);
     } catch (err) {
+      setSavedTestOpen(false);
       setError(err instanceof Error ? err.message : "Test failed");
+    } finally {
+      setTestingSourceId(null);
     }
   };
 
@@ -340,6 +454,11 @@ export function AdminPage() {
         </p>
       )}
       {error && <p className="admin-error">{error}</p>}
+      {testingSourceId && (
+        <p className="admin-status">
+          Testing source… this can take up to 15 seconds for calendar APIs.
+        </p>
+      )}
       {loading && <p className="admin-status">Loading…</p>}
 
       {!loading && sources.length === 0 && (
@@ -375,22 +494,22 @@ export function AdminPage() {
                 <td>{s.scrape_frequency_minutes}m</td>
                 <td>{s.last_scraped_at ? new Date(s.last_scraped_at).toLocaleString() : "—"}</td>
                 <td className="admin-actions">
-                  <button type="button" className="btn" onClick={() => openEdit(s)}>
-                    Edit
-                  </button>
-                  <button type="button" className="btn" onClick={() => void runSavedTest(s)}>
-                    Test
-                  </button>
-                  <button type="button" className="btn" onClick={() => void runScrape(s)}>
-                    Scrape
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
+                  <IconButton label="Edit" onClick={() => openEdit(s)}>
+                    <IconEdit />
+                  </IconButton>
+                  <IconButton label="Test" loading={testingSourceId === s.id} onClick={() => void runSavedTest(s)}>
+                    <IconTest />
+                  </IconButton>
+                  <IconButton label="Scrape" onClick={() => void runScrape(s)}>
+                    <IconScrape />
+                  </IconButton>
+                  <IconButton
+                    label="Delete"
+                    variant="danger"
                     onClick={() => void removeSource(s)}
                   >
-                    Delete
-                  </button>
+                    <IconDelete />
+                  </IconButton>
                 </td>
               </tr>
             ))}
@@ -559,6 +678,262 @@ export function AdminPage() {
               </>
             )}
 
+            {form.source_type === "cityspark" && (
+              <>
+                <h4>CitySpark config</h4>
+                <div className="admin-form-grid">
+                  <label className="admin-form-wide">
+                    Portal slug *
+                    <input
+                      value={form.cityspark.portal_slug}
+                      placeholder="MarinIndependent"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cityspark: { ...form.cityspark, portal_slug: e.target.value },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Latitude *
+                    <input
+                      type="number"
+                      step="any"
+                      value={form.cityspark.latitude || ""}
+                      placeholder="37.9735"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cityspark: {
+                            ...form.cityspark,
+                            latitude: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Longitude *
+                    <input
+                      type="number"
+                      step="any"
+                      value={form.cityspark.longitude || ""}
+                      placeholder="-122.5311"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cityspark: {
+                            ...form.cityspark,
+                            longitude: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Radius (miles)
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={form.cityspark.distance_miles}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cityspark: {
+                            ...form.cityspark,
+                            distance_miles: Number(e.target.value) || 25,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Days ahead
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={form.cityspark.days_ahead}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          cityspark: {
+                            ...form.cityspark,
+                            days_ahead: Number(e.target.value) || 30,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <p className="admin-status">
+                  Tip: paste the calendar URL and click “Detect” to extract the portal slug from the
+                  CitySpark embed script.
+                </p>
+              </>
+            )}
+
+            {form.source_type === "eventscom" && (
+              <>
+                <h4>Events.com config</h4>
+                <div className="admin-form-grid">
+                  <label className="admin-form-wide">
+                    Calendar token *
+                    <input
+                      value={form.eventscom.calendar_token}
+                      placeholder="68b81b25-b6de-11eb-abbe-42010a0a0a0b"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          eventscom: { ...form.eventscom, calendar_token: e.target.value },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Days ahead
+                    <input
+                      type="number"
+                      min={1}
+                      max={370}
+                      value={form.eventscom.days_ahead}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          eventscom: {
+                            ...form.eventscom,
+                            days_ahead: Number(e.target.value) || 30,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Radius (miles)
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={form.eventscom.radius_miles}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          eventscom: {
+                            ...form.eventscom,
+                            radius_miles: Number(e.target.value) || 25,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {form.source_type === "tribe" && (
+              <>
+                <h4>The Events Calendar config</h4>
+                <div className="admin-form-grid">
+                  <label className="admin-form-wide">
+                    Site base URL *
+                    <input
+                      value={form.tribe.base_url}
+                      placeholder="https://demo.theeventscalendar.com"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          tribe: { ...form.tribe, base_url: e.target.value },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Days ahead
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={form.tribe.days_ahead}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          tribe: { ...form.tribe, days_ahead: Number(e.target.value) || 90 },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Events per page
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={form.tribe.per_page}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          tribe: { ...form.tribe, per_page: Number(e.target.value) || 100 },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {form.source_type === "localist" && (
+              <>
+                <h4>Localist config</h4>
+                <div className="admin-form-grid">
+                  <label className="admin-form-wide">
+                    Calendar URL *
+                    <input
+                      value={form.localist.calendar_url}
+                      placeholder="https://events.wfu.edu"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          localist: { ...form.localist, calendar_url: e.target.value },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Days ahead
+                    <input
+                      type="number"
+                      min={1}
+                      max={370}
+                      value={form.localist.days}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          localist: { ...form.localist, days: Number(e.target.value) || 90 },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Events per page
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={form.localist.pp}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          localist: { ...form.localist, pp: Number(e.target.value) || 100 },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
             <div className="admin-modal-actions">
               <button type="button" className="btn" onClick={() => void runDryTest()} disabled={testing}>
                 {testing ? "Testing…" : "Test scrape"}
@@ -659,5 +1034,98 @@ function AdminHeader({ onExit }: { onExit: (() => void) | undefined }) {
         )}
       </div>
     </header>
+  );
+}
+
+interface IconButtonProps {
+  label: string;
+  onClick: () => void;
+  variant?: "default" | "danger";
+  loading?: boolean;
+  disabled?: boolean;
+}
+
+function IconButton({
+  label,
+  onClick,
+  variant = "default",
+  loading = false,
+  disabled = false,
+  children,
+}: IconButtonProps & { children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      className={`btn btn-icon${variant === "danger" ? " btn-danger" : ""}${loading ? " btn-icon-loading" : ""}`}
+      onClick={onClick}
+      disabled={disabled || loading}
+      aria-label={label}
+      title={label}
+      aria-busy={loading}
+    >
+      {loading ? <IconSpinner /> : children}
+    </button>
+  );
+}
+
+function IconEdit() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function IconTest() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function IconScrape() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M12 3v12" />
+      <path d="m8 11 4 4 4-4" />
+      <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+    </svg>
+  );
+}
+
+function IconDelete() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+function IconSpinner() {
+  return (
+    <svg
+      className="btn-spinner"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M12 2v4" />
+      <path d="M12 18v4" />
+      <path d="m4.93 4.93 2.83 2.83" />
+      <path d="m16.24 16.24 2.83 2.83" />
+      <path d="M2 12h4" />
+      <path d="M18 12h4" />
+      <path d="m4.93 19.07 2.83-2.83" />
+      <path d="m16.24 7.76 2.83-2.83" />
+    </svg>
   );
 }

@@ -11,7 +11,7 @@ import { EventCard } from "./components/EventCard";
 import { LocationPicker } from "./components/LocationPicker";
 import { SearchBar } from "./components/SearchBar";
 import type { Event, GeoLocation, SearchFilters } from "./types";
-import { SF_BAY_DEFAULT } from "./types";
+import { loadStoredLocation, readInitialLocation, saveStoredLocation } from "./locationStorage";
 import logoUrl from "./assets/logo.svg";
 import "./App.css";
 
@@ -28,8 +28,9 @@ function datePresetToStart(preset: SearchFilters["datePreset"]): string | undefi
 }
 
 export default function App() {
-  const [location, setLocation] = useState<GeoLocation>(SF_BAY_DEFAULT);
-  const [locationLabel, setLocationLabel] = useState<string>("SF Bay Area");
+  const initialLocation = readInitialLocation();
+  const [location, setLocation] = useState<GeoLocation>(initialLocation.location);
+  const [locationLabel, setLocationLabel] = useState<string>(initialLocation.label);
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -39,6 +40,7 @@ export default function App() {
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (loadStoredLocation()) return;
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -46,7 +48,7 @@ export default function App() {
         setLocationLabel("Your location");
       },
       () => {
-        setLocationLabel("SF Bay Area");
+        // keep default from readInitialLocation()
       },
       { timeout: 8000 }
     );
@@ -55,6 +57,7 @@ export default function App() {
   const handleLocationSelect = useCallback((loc: GeoLocation, label: string) => {
     setLocation(loc);
     setLocationLabel(label);
+    saveStoredLocation(loc, label);
   }, []);
 
   useEffect(() => {

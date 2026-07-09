@@ -91,6 +91,48 @@ SF_BAY_SOURCES: list[dict] = [
         "source_type": "evvnt",
         "config": {"publisher_id": 4298, "hits_per_page": 50},
     },
+    {
+        "name": "Marin IJ Events",
+        "url": "https://www.marinij.com/event-calendar/",
+        "region": "SF Bay Area",
+        "timezone": "America/Los_Angeles",
+        "source_type": "cityspark",
+        "default_category": "community",
+        "config": {
+            "portal_slug": "MarinIndependent",
+            "latitude": 37.9735,
+            "longitude": -122.5311,
+            "distance_miles": 25,
+            "days_ahead": 30,
+            "events_per_day": 50,
+        },
+    },
+    {
+        "name": "Berkeleyside Events",
+        "url": "https://www.berkeleyside.org/events",
+        "region": "SF Bay Area",
+        "timezone": "America/Los_Angeles",
+        "source_type": "eventscom",
+        "default_category": "community",
+        "config": {
+            "calendar_token": "68b81b25-b6de-11eb-abbe-42010a0a0a0b",
+            "days_ahead": 30,
+            "radius_miles": 25,
+        },
+    },
+    {
+        "name": "Oaklandside Events",
+        "url": "https://oaklandside.org/events/",
+        "region": "SF Bay Area",
+        "timezone": "America/Los_Angeles",
+        "source_type": "eventscom",
+        "default_category": "community",
+        "config": {
+            "calendar_token": "3a4a1c31-2d86-11ec-aafd-42010a0a0a0b",
+            "days_ahead": 30,
+            "radius_miles": 25,
+        },
+    },
 ]
 
 # Demo events for local dev when scraping is unavailable
@@ -134,7 +176,7 @@ def seed_sources(session: Session) -> None:
             scrape_frequency_minutes=1440,
             source_type=src_data.get("source_type", "html_css"),
             config=src_data["config"],
-            default_category="music",
+            default_category=src_data.get("default_category", "music"),
         )
         session.add(source)
 

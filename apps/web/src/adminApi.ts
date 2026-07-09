@@ -8,13 +8,42 @@ import type {
 const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export function buildConfig(input: SourceInput): Record<string, unknown> {
-  if (input.source_type === "evvnt") {
-    return {
-      publisher_id: input.evvnt.publisher_id,
-      hits_per_page: input.evvnt.hits_per_page,
-    };
+  switch (input.source_type) {
+    case "evvnt":
+      return {
+        publisher_id: input.evvnt.publisher_id,
+        hits_per_page: input.evvnt.hits_per_page,
+      };
+    case "cityspark":
+      return {
+        portal_slug: input.cityspark.portal_slug,
+        latitude: input.cityspark.latitude,
+        longitude: input.cityspark.longitude,
+        distance_miles: input.cityspark.distance_miles,
+        days_ahead: input.cityspark.days_ahead,
+        events_per_day: input.cityspark.events_per_day,
+      };
+    case "eventscom":
+      return {
+        calendar_token: input.eventscom.calendar_token,
+        days_ahead: input.eventscom.days_ahead,
+        radius_miles: input.eventscom.radius_miles,
+      };
+    case "tribe":
+      return {
+        base_url: input.tribe.base_url,
+        days_ahead: input.tribe.days_ahead,
+        per_page: input.tribe.per_page,
+      };
+    case "localist":
+      return {
+        calendar_url: input.localist.calendar_url,
+        days: input.localist.days,
+        pp: input.localist.pp,
+      };
+    default:
+      return { ...input.selectors };
   }
-  return { ...input.selectors };
 }
 
 function serializeSource(input: SourceInput): Record<string, unknown> {

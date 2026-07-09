@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-SourceType = Literal["html_css", "evvnt"]
+SourceType = Literal["html_css", "evvnt", "cityspark", "eventscom", "tribe", "localist"]
 
 
 class SourceSelectors(BaseModel):
@@ -33,6 +33,41 @@ class EvvntConfig(BaseModel):
 
     publisher_id: int
     hits_per_page: int = Field(default=50, ge=1, le=100)
+
+
+class CitySparkConfig(BaseModel):
+    """Config for CitySpark portal calendars (used by many US newspapers)."""
+
+    portal_slug: str = Field(min_length=1, max_length=128)
+    latitude: float = Field(description="Portal center latitude for geo-filtered fetches")
+    longitude: float = Field(description="Portal center longitude for geo-filtered fetches")
+    distance_miles: int = Field(default=25, ge=1, le=500)
+    days_ahead: int = Field(default=30, ge=1, le=90)
+    events_per_day: int = Field(default=50, ge=1, le=100)
+
+
+class EventsComConfig(BaseModel):
+    """Config for Events.com / Evensi embedded calendars."""
+
+    calendar_token: str = Field(min_length=36, max_length=36)
+    days_ahead: int = Field(default=30, ge=1, le=370)
+    radius_miles: int = Field(default=25, ge=1, le=500)
+
+
+class TribeConfig(BaseModel):
+    """Config for The Events Calendar WordPress REST API."""
+
+    base_url: HttpUrl | str
+    days_ahead: int = Field(default=90, ge=1, le=365)
+    per_page: int = Field(default=100, ge=1, le=100)
+
+
+class LocalistConfig(BaseModel):
+    """Config for Localist public calendar APIs."""
+
+    calendar_url: HttpUrl | str
+    days: int = Field(default=90, ge=1, le=370)
+    pp: int = Field(default=100, ge=1, le=100)
 
 
 class SourceCreate(BaseModel):

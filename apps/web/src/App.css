@@ -394,7 +394,36 @@ body {
 .admin-actions {
   display: flex;
   gap: 0.35rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.btn-icon {
+  padding: 0.45rem;
+  line-height: 0;
+  justify-content: center;
+}
+
+.btn-icon svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+.btn-icon-loading {
+  cursor: wait;
+}
+
+.btn-spinner {
+  animation: admin-spin 0.8s linear infinite;
+}
+
+@keyframes admin-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .admin-status,

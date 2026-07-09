@@ -27,12 +27,20 @@ class Adapter(Protocol):
 
 def get_adapter(source_type: str) -> Adapter:
     # Imported lazily to avoid import cycles (adapters import models/schemas).
+    from joinable_core.scraper.adapters.cityspark import CitySparkAdapter
+    from joinable_core.scraper.adapters.eventscom import EventsComAdapter
     from joinable_core.scraper.adapters.evvnt import EvvntAdapter
     from joinable_core.scraper.adapters.html_css import HtmlCssAdapter
+    from joinable_core.scraper.adapters.localist import LocalistAdapter
+    from joinable_core.scraper.adapters.tribe import TribeAdapter
 
     registry: dict[str, Adapter] = {
         HtmlCssAdapter.source_type: HtmlCssAdapter(),
         EvvntAdapter.source_type: EvvntAdapter(),
+        CitySparkAdapter.source_type: CitySparkAdapter(),
+        EventsComAdapter.source_type: EventsComAdapter(),
+        TribeAdapter.source_type: TribeAdapter(),
+        LocalistAdapter.source_type: LocalistAdapter(),
     }
     adapter = registry.get(source_type)
     if adapter is None:
@@ -41,4 +49,4 @@ def get_adapter(source_type: str) -> Adapter:
 
 
 def list_source_types() -> list[str]:
-    return ["html_css", "evvnt"]
+    return ["html_css", "evvnt", "cityspark", "eventscom", "tribe", "localist"]
