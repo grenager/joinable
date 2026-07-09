@@ -48,9 +48,11 @@ class Source(Base):
     region: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="America/Los_Angeles")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    scrape_frequency_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=360)
-    selectors: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    scrape_frequency_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=1440)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="html_css")
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     default_category: Mapped[str] = mapped_column(String(64), nullable=False, default="music")
+    render_js: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_scraped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -130,7 +132,11 @@ class ScrapeJob(Base):
         UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[ScrapeJobStatus] = mapped_column(
-        Enum(ScrapeJobStatus, name="scrape_job_status"),
+        Enum(
+            ScrapeJobStatus,
+            name="scrape_job_status",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
         nullable=False,
         default=ScrapeJobStatus.PENDING,
     )
@@ -169,7 +175,11 @@ class ApiKey(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     tier: Mapped[ApiKeyTier] = mapped_column(
-        Enum(ApiKeyTier, name="api_key_tier"),
+        Enum(
+            ApiKeyTier,
+            name="api_key_tier",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
         nullable=False,
         default=ApiKeyTier.FREE,
     )

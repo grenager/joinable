@@ -5,15 +5,21 @@ from uuid import UUID
 
 from celery import Celery
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 from joinable_core.db import get_db_session
 from joinable_core.models import Source
 from joinable_core.schemas import (
+    RawScrapedEvent,
+    ScrapeTestRequest,
     ScrapeTestResponse,
     SourceCreate,
+    SourceDetectRequest,
+    SourceDetectResponse,
     SourceResponse,
-    SourceSelectors,
     SourceUpdate,
 )
+from joinable_core.scraper.adapters import get_adapter
+from joinable_core.scraper.adapters.evvnt import detect_evvnt
 from joinable_core.scraper.engine import ScrapeEngine
 from joinable_core.settings import get_settings
 from pydantic import BaseModel
@@ -36,6 +42,34 @@ def _get_celery() -> Celery:
     return Celery("joinable", broker=settings.redis_url, backend=settings.redis_url)
 
 
+def _validate_config(source_type: str, config: dict) -> dict:
+    try:
+        return get_adapter(source_type).validate_config(config)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid config for source_type '{source_type}': {exc}",
+        ) from exc
+
+
+def _scrape_source_like(source: Source) -> list[RawScrapedEvent]:
+    return get_adapter(source.source_type).scrape(source)
+
+
+def _build_test_response(events: list[RawScrapedEvent]) -> ScrapeTestResponse:
+    sample: list[dict[str, str | None]] = [
+        {
+            "title": e.title,
+            "start": e.start_raw,
+            "venue": e.venue_name,
+            "url": e.external_url,
+            "image": e.image_url,
+        }
+        for e in events[:50]
+    ]
+    return ScrapeTestResponse(events_found=len(events), sample=sample)
+
+
 @router.get("", response_model=list[SourceResponse])
 async def list_sources(
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -51,15 +85,18 @@ async def create_source(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     _: Annotated[AuthUser, Depends(get_admin_user)],
 ) -> SourceResponse:
+    config = _validate_config(body.source_type, body.config)
     source = Source(
         name=body.name,
         url=str(body.url),
+        source_type=body.source_type,
         region=body.region,
         timezone=body.timezone,
         enabled=body.enabled,
         scrape_frequency_minutes=body.scrape_frequency_minutes,
-        selectors=body.selectors.model_dump(),
+        config=config,
         default_category=body.default_category,
+        render_js=body.render_js,
     )
     session.add(source)
     await session.flush()
@@ -91,10 +128,11 @@ async def update_source(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
 
     update_data = body.model_dump(exclude_unset=True)
-    if "selectors" in update_data and update_data["selectors"] is not None:
-        update_data["selectors"] = body.selectors.model_dump() if body.selectors else {}
-    if "url" in update_data and update_data["url"] is not None:
+    if update_data.get("url") is not None:
         update_data["url"] = str(update_data["url"])
+    if update_data.get("config") is not None:
+        source_type = update_data.get("source_type", source.source_type)
+        update_data["config"] = _validate_config(source_type, update_data["config"])
 
     for key, value in update_data.items():
         setattr(source, key, value)
@@ -116,6 +154,59 @@ async def delete_source(
     await session.delete(source)
 
 
+@router.post("/detect", response_model=SourceDetectResponse)
+async def detect_source(
+    body: SourceDetectRequest,
+    _: Annotated[AuthUser, Depends(get_admin_user)],
+) -> SourceDetectResponse:
+    """Fetch a URL and guess its platform (e.g. evvnt) + config."""
+    try:
+        html = await run_in_threadpool(ScrapeEngine().fetch_html, str(body.url))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Could not fetch URL: {exc}",
+        ) from exc
+
+    evvnt = detect_evvnt(html)
+    if evvnt is not None:
+        return SourceDetectResponse(
+            source_type="evvnt",
+            config=evvnt.model_dump(),
+            detail=f"Detected evvnt discovery API (publisher_id={evvnt.publisher_id}).",
+        )
+
+    return SourceDetectResponse(
+        source_type="html_css",
+        config={},
+        render_js=True,
+        detail="No known platform detected. Using generic HTML+CSS; add selectors manually.",
+    )
+
+
+@router.post("/test", response_model=ScrapeTestResponse)
+async def test_config(
+    body: ScrapeTestRequest,
+    _: Annotated[AuthUser, Depends(get_admin_user)],
+) -> ScrapeTestResponse:
+    """Dry-run a URL + config without saving, to validate an adapter setup."""
+    config = _validate_config(body.source_type, body.config)
+    transient = Source(
+        url=str(body.url),
+        source_type=body.source_type,
+        config=config,
+        render_js=body.render_js,
+    )
+    try:
+        events = await run_in_threadpool(_scrape_source_like, transient)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Scrape test failed: {exc}",
+        ) from exc
+    return _build_test_response(events)
+
+
 @router.post("/{source_id}/test", response_model=ScrapeTestResponse)
 async def test_source(
     source_id: UUID,
@@ -126,26 +217,20 @@ async def test_source(
     if source is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
 
-    engine = ScrapeEngine()
-    selectors = SourceSelectors.model_validate(source.selectors)
+    transient = Source(
+        url=source.url,
+        source_type=source.source_type,
+        config=source.config,
+        render_js=source.render_js,
+    )
     try:
-        events = engine.scrape(source.url, selectors)
+        events = await run_in_threadpool(_scrape_source_like, transient)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Scrape test failed: {exc}",
         ) from exc
-
-    sample = [
-        {
-            "title": e.title,
-            "start": e.start_raw,
-            "venue": e.venue_name,
-            "url": e.external_url,
-        }
-        for e in events[:5]
-    ]
-    return ScrapeTestResponse(events_found=len(events), sample=sample)
+    return _build_test_response(events)
 
 
 @router.post("/{source_id}/scrape", response_model=QueuedScrapeResponse)

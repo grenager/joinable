@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = Field(default="", alias="SUPABASE_JWT_SECRET")
     supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
     admin_emails: str = Field(default="", alias="ADMIN_EMAILS")
+    admin_api_token: str = Field(default="", alias="ADMIN_API_TOKEN")
     api_cors_origins: str = Field(
         default="http://localhost:5173",
         alias="API_CORS_ORIGINS",
@@ -41,6 +42,9 @@ class Settings(BaseSettings):
         alias="GEOCODER_USER_AGENT",
     )
     google_maps_api_key: str = Field(default="", alias="GOOGLE_MAPS_API_KEY")
+    scrapingbee_api_key: str = Field(default="", alias="SCRAPINGBEE_API_KEY")
+    scrapingbee_premium_proxy: bool = Field(default=True, alias="SCRAPINGBEE_PREMIUM_PROXY")
+    scrapingbee_country_code: str = Field(default="us", alias="SCRAPINGBEE_COUNTRY_CODE")
 
     @property
     def admin_email_list(self) -> list[str]:

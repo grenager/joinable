@@ -11,9 +11,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from joinable_core.models import Event, ScrapeJob, ScrapeJobStatus, Source, Venue
-from joinable_core.schemas import RawScrapedEvent, SourceSelectors
+from joinable_core.schemas import RawScrapedEvent
+from joinable_core.scraper.adapters import get_adapter
 from joinable_core.scraper.dedupe import compute_dedupe_hash
-from joinable_core.scraper.engine import ScrapeEngine
 from joinable_core.scraper.geocode import Geocoder
 from joinable_core.scraper.normalize import parse_event_datetime
 
@@ -26,9 +26,10 @@ logger = logging.getLogger(__name__)
 def _get_or_create_venue(
     session: Session,
     geocoder: Geocoder,
-    venue_name: str | None,
+    raw: RawScrapedEvent,
     region: str,
 ) -> Venue | None:
+    venue_name = raw.venue_name
     if not venue_name:
         return None
 
@@ -38,14 +39,25 @@ def _get_or_create_venue(
     if existing is not None:
         return existing
 
-    coords = geocoder.geocode(venue_name, region=region)
+    lat = raw.latitude
+    lng = raw.longitude
+    # Only geocode when the adapter did not already supply coordinates.
+    if lat is None or lng is None:
+        coords = geocoder.geocode(venue_name, region=region)
+        if coords is not None:
+            lat, lng = coords
+
     location = None
-    city = region
-    if coords is not None:
-        lat, lng = coords
+    if lat is not None and lng is not None:
         location = WKTElement(f"POINT({lng} {lat})", srid=4326)
 
-    venue = Venue(name=venue_name, region=region, city=city, location=location)
+    venue = Venue(
+        name=venue_name,
+        region=region,
+        city=raw.city or region,
+        address=raw.address,
+        location=location,
+    )
     session.add(venue)
     session.flush()
     return venue
@@ -57,14 +69,14 @@ def _upsert_event(
     raw: RawScrapedEvent,
     venue: Venue | None,
 ) -> bool:
-    selectors = SourceSelectors.model_validate(source.selectors)
-    start_time = parse_event_datetime(raw.start_raw, source.timezone, selectors.date_format)
+    date_format = source.config.get("date_format")
+    start_time = parse_event_datetime(raw.start_raw, source.timezone, date_format)
     if start_time is None:
         return False
 
     end_time = None
     if raw.end_raw:
-        end_time = parse_event_datetime(raw.end_raw, source.timezone, selectors.date_format)
+        end_time = parse_event_datetime(raw.end_raw, source.timezone, date_format)
 
     dedupe_hash = compute_dedupe_hash(raw.title, start_time.isoformat(), raw.venue_name)
     now = datetime.now(tz=UTC)
@@ -77,7 +89,7 @@ def _upsert_event(
         description=raw.description,
         start_time=start_time,
         end_time=end_time,
-        category=source.default_category,
+        category=raw.category or source.default_category,
         external_url=raw.external_url,
         image_url=raw.image_url,
         price_text=raw.price_text,
@@ -115,15 +127,14 @@ def run_scrape_for_source(session: Session, source_id: UUID) -> ScrapeJob:
     session.add(job)
     session.flush()
 
-    engine = ScrapeEngine()
+    adapter = get_adapter(source.source_type)
     geocoder = Geocoder()
-    selectors = SourceSelectors.model_validate(source.selectors)
     events_found = 0
 
     try:
-        raw_events = engine.scrape(source.url, selectors)
+        raw_events = adapter.scrape(source)
         for raw in raw_events:
-            venue = _get_or_create_venue(session, geocoder, raw.venue_name, source.region)
+            venue = _get_or_create_venue(session, geocoder, raw, source.region)
             if _upsert_event(session, source, raw, venue):
                 events_found += 1
 

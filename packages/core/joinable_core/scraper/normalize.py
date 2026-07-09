@@ -40,13 +40,22 @@ def resolve_url(base_url: str, href: str | None) -> str | None:
 
 
 def extract_text(element, selector: str | None) -> str | None:
+    """Return the combined, whitespace-normalized text of all matched elements.
+
+    Many real-world calendars split a single logical value (e.g. a date or a
+    co-headliner list) across multiple sibling elements sharing one class, so we
+    join every match rather than only the first.
+    """
     if not selector or element is None:
         return None
-    found = element.select_one(selector)
-    if found is None:
+    parts: list[str] = []
+    for found in element.select(selector):
+        text = " ".join(found.get_text(separator=" ", strip=True).split())
+        if text:
+            parts.append(text)
+    if not parts:
         return None
-    text = found.get_text(separator=" ", strip=True)
-    return text or None
+    return " ".join(parts)
 
 
 def extract_attr(element, selector: str | None, attr: str) -> str | None:

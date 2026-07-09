@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import secrets
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from joinable_core.settings import get_settings
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
 security = HTTPBearer(auto_error=False)
+
+# Synthetic user representing an admin authenticated via ADMIN_API_TOKEN.
+_TOKEN_ADMIN = UUID(int=0)
 
 
 class AuthUser(BaseModel):
@@ -55,9 +59,21 @@ async def get_required_user(
     return user
 
 
-async def get_admin_user(user: Annotated[AuthUser, Depends(get_required_user)]) -> AuthUser:
+async def get_admin_user(
+    user: Annotated[AuthUser | None, Depends(get_optional_user)],
+    x_admin_token: Annotated[str | None, Header()] = None,
+) -> AuthUser:
+    """Admin access via a shared ADMIN_API_TOKEN header or an admin-email JWT."""
     settings = get_settings()
-    email = (user.email or "").lower()
-    if email not in settings.admin_email_list:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return user
+
+    if (
+        settings.admin_api_token
+        and x_admin_token is not None
+        and secrets.compare_digest(x_admin_token, settings.admin_api_token)
+    ):
+        return AuthUser(id=_TOKEN_ADMIN, email="admin-token")
+
+    if user is not None and (user.email or "").lower() in settings.admin_email_list:
+        return user
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")

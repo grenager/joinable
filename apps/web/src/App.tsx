@@ -148,6 +148,9 @@ export default function App() {
               Sign in with Google
             </button>
           ) : null}
+          <a className="admin-link" href="#/admin" title="Admin console">
+            Admin
+          </a>
         </div>
       </header>
 

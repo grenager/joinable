@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+SourceType = Literal["html_css", "evvnt"]
 
 
 class SourceSelectors(BaseModel):
@@ -26,26 +28,37 @@ class SourceSelectors(BaseModel):
     url_attribute: str = Field(default="href", description="Attribute to read for url selector")
 
 
+class EvvntConfig(BaseModel):
+    """Config for sources served by the evvnt discovery API."""
+
+    publisher_id: int
+    hits_per_page: int = Field(default=50, ge=1, le=100)
+
+
 class SourceCreate(BaseModel):
     name: str
     url: HttpUrl | str
+    source_type: SourceType = "html_css"
     region: str = "SF Bay Area"
     timezone: str = "America/Los_Angeles"
     enabled: bool = True
-    scrape_frequency_minutes: int = 360
-    selectors: SourceSelectors
+    scrape_frequency_minutes: int = 1440
+    config: dict[str, Any] = Field(default_factory=dict)
     default_category: str = "music"
+    render_js: bool = False
 
 
 class SourceUpdate(BaseModel):
     name: str | None = None
     url: HttpUrl | str | None = None
+    source_type: SourceType | None = None
     region: str | None = None
     timezone: str | None = None
     enabled: bool | None = None
     scrape_frequency_minutes: int | None = None
-    selectors: SourceSelectors | None = None
+    config: dict[str, Any] | None = None
     default_category: str | None = None
+    render_js: bool | None = None
 
 
 class SourceResponse(BaseModel):
@@ -54,12 +67,14 @@ class SourceResponse(BaseModel):
     id: UUID
     name: str
     url: str
+    source_type: str
     region: str
     timezone: str
     enabled: bool
     scrape_frequency_minutes: int
-    selectors: dict[str, Any]
+    config: dict[str, Any]
     default_category: str
+    render_js: bool
     last_scraped_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -113,6 +128,26 @@ class BookmarkResponse(BaseModel):
     event: EventResponse | None = None
 
 
+class ScrapeTestRequest(BaseModel):
+    """Dry-run scrape of an arbitrary URL + config (without saving a source)."""
+
+    url: HttpUrl | str
+    source_type: SourceType = "html_css"
+    config: dict[str, Any] = Field(default_factory=dict)
+    render_js: bool = False
+
+
+class SourceDetectRequest(BaseModel):
+    url: HttpUrl | str
+
+
+class SourceDetectResponse(BaseModel):
+    source_type: SourceType
+    config: dict[str, Any]
+    render_js: bool = False
+    detail: str
+
+
 class ScrapeTestResponse(BaseModel):
     events_found: int
     sample: list[dict[str, str | None]]
@@ -139,6 +174,13 @@ class RawScrapedEvent(BaseModel):
     image_url: str | None = None
     price_text: str | None = None
     description: str | None = None
+    # Optional structured fields adapters may provide (e.g. JSON APIs like evvnt),
+    # letting the pipeline skip geocoding when coordinates are already known.
+    latitude: float | None = None
+    longitude: float | None = None
+    address: str | None = None
+    city: str | None = None
+    category: str | None = None
 
 
 class HealthResponse(BaseModel):

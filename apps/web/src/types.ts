@@ -49,3 +49,101 @@ export interface GeoLocation {
 }
 
 export const SF_BAY_DEFAULT: GeoLocation = { lat: 37.7749, lng: -122.4194 };
+
+export interface SourceSelectors {
+  container: string;
+  title: string;
+  start: string;
+  end: string | null;
+  venue: string | null;
+  url: string | null;
+  image: string | null;
+  price: string | null;
+  description: string | null;
+  date_format: string | null;
+  url_attribute: string;
+}
+
+export type SourceType = "html_css" | "evvnt";
+
+export interface EvvntConfig {
+  publisher_id: number;
+  hits_per_page: number;
+}
+
+export interface Source {
+  id: string;
+  name: string;
+  url: string;
+  source_type: SourceType;
+  region: string;
+  timezone: string;
+  enabled: boolean;
+  scrape_frequency_minutes: number;
+  config: Record<string, unknown>;
+  default_category: string;
+  render_js: boolean;
+  last_scraped_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourceInput {
+  name: string;
+  url: string;
+  source_type: SourceType;
+  region: string;
+  timezone: string;
+  enabled: boolean;
+  scrape_frequency_minutes: number;
+  default_category: string;
+  render_js: boolean;
+  selectors: SourceSelectors;
+  evvnt: EvvntConfig;
+}
+
+export interface ScrapeTestSample {
+  title: string | null;
+  start: string | null;
+  venue: string | null;
+  url: string | null;
+  image: string | null;
+}
+
+export interface ScrapeTestResult {
+  events_found: number;
+  sample: ScrapeTestSample[];
+}
+
+export const EMPTY_SELECTORS: SourceSelectors = {
+  container: "",
+  title: "",
+  start: "",
+  end: null,
+  venue: null,
+  url: null,
+  image: null,
+  price: null,
+  description: null,
+  date_format: null,
+  url_attribute: "href",
+};
+
+export const EMPTY_EVVNT_CONFIG: EvvntConfig = {
+  publisher_id: 0,
+  hits_per_page: 50,
+};
+
+export const EMPTY_SOURCE_INPUT: SourceInput = {
+  name: "",
+  url: "",
+  source_type: "html_css",
+  region: "SF Bay Area",
+  timezone: "America/Los_Angeles",
+  enabled: true,
+  scrape_frequency_minutes: 1440,
+  default_category: "music",
+  render_js: false,
+  selectors: { ...EMPTY_SELECTORS },
+  evvnt: { ...EMPTY_EVVNT_CONFIG },
+};

@@ -107,19 +107,40 @@ Set env vars from `.env.example` on each service. Enable PostGIS in Supabase SQL
 CREATE EXTENSION IF NOT EXISTS postgis;
 ```
 
+## Scraping adapters
+
+Each source has a `source_type` that selects a pluggable **adapter** (in
+`packages/core/joinable_core/scraper/adapters/`). Every adapter fetches and
+parses events into the same normalized shape, so the ingestion pipeline
+(dedupe → geocode → upsert) is identical regardless of the source. Adding
+support for a new calendar platform means writing one adapter and registering
+it in `adapters/base.py`.
+
+The `config` JSONB column holds adapter-specific settings:
+
+| `source_type` | What it does | `config` keys |
+| --- | --- | --- |
+| `html_css` | Fetches HTML and extracts events with CSS selectors (the long tail). Uses ScrapingBee when `SCRAPINGBEE_API_KEY` is set; `render_js` toggles JS rendering. | `container`, `title`, `start`, `end`, `venue`, `url`, `image`, `price`, `description`, `date_format`, `url_attribute` |
+| `evvnt` | Fetches the [evvnt](https://evvnt.com) discovery API used by many news publishers (e.g. SFGate). Returns coordinates + address, so geocoding is skipped. | `publisher_id`, `hits_per_page` |
+
 ## Admin: adding scrape sources
 
-Authenticated admin users can register calendar sources via API:
+Use the admin console (`#/admin` in the web app, gated by `ADMIN_API_TOKEN`) or
+the API directly. Auth accepts either an admin JWT (`Authorization: Bearer …`)
+or the `X-Admin-Token` header.
+
+HTML + CSS source:
 
 ```bash
 curl -X POST http://localhost:8000/v1/admin/sources \
-  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "X-Admin-Token: $ADMIN_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Venue Calendar",
     "url": "https://example.com/events",
+    "source_type": "html_css",
     "region": "SF Bay Area",
-    "selectors": {
+    "config": {
       "container": ".event",
       "title": "h2",
       "start": ".date",
@@ -129,8 +150,26 @@ curl -X POST http://localhost:8000/v1/admin/sources \
   }'
 ```
 
-Test selectors: `POST /v1/admin/sources/{id}/test`  
-Trigger scrape: `POST /v1/admin/sources/{id}/scrape`
+evvnt source (auto-fill `config` with detect below):
+
+```bash
+curl -X POST http://localhost:8000/v1/admin/sources \
+  -H "X-Admin-Token: $ADMIN_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "SFGate Events",
+    "url": "https://www.sfgate.com/culture-events/",
+    "source_type": "evvnt",
+    "config": { "publisher_id": 4298, "hits_per_page": 50 }
+  }'
+```
+
+Other admin endpoints:
+
+- `POST /v1/admin/sources/detect` — fetch a URL and auto-detect its platform + `config` (e.g. spots the evvnt plugin and returns its `publisher_id`)
+- `POST /v1/admin/sources/test` — dry-run a `source_type` + `config` without saving
+- `POST /v1/admin/sources/{id}/test` — test a saved source
+- `POST /v1/admin/sources/{id}/scrape` — enqueue a scrape
 
 ## License
 

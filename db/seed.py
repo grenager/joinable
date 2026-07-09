@@ -15,7 +15,7 @@ SF_BAY_SOURCES: list[dict] = [
         "url": "https://www.theindependentsf.com/calendar/",
         "region": "SF Bay Area",
         "timezone": "America/Los_Angeles",
-        "selectors": {
+        "config": {
             "container": ".event-item, .calendar-event, article.event",
             "title": "h2, h3, .event-title, .title",
             "start": ".event-date, .date, time",
@@ -31,12 +31,15 @@ SF_BAY_SOURCES: list[dict] = [
         "url": "https://www.bottomofthehill.com/calendar.html",
         "region": "SF Bay Area",
         "timezone": "America/Los_Angeles",
-        "selectors": {
-            "container": "tr, .show",
-            "title": "td:nth-child(2), .band, .title",
-            "start": "td:first-child, .date",
+        "config": {
+            "container": "#listings tr",
+            "title": ".band",
+            "start": ".date",
             "venue": None,
-            "url": "a",
+            "url": "a[href*='stubmatic']",
+            "image": "img",
+            "price": ".cover",
+            "description": ".genre",
             "url_attribute": "href",
         },
     },
@@ -45,7 +48,7 @@ SF_BAY_SOURCES: list[dict] = [
         "url": "https://rickshawstop.com/calendar/",
         "region": "SF Bay Area",
         "timezone": "America/Los_Angeles",
-        "selectors": {
+        "config": {
             "container": ".event, .show, article",
             "title": "h2, h3, .event-title",
             "start": ".date, time, .event-date",
@@ -59,7 +62,7 @@ SF_BAY_SOURCES: list[dict] = [
         "url": "https://thechapelsf.com/calendar/",
         "region": "SF Bay Area",
         "timezone": "America/Los_Angeles",
-        "selectors": {
+        "config": {
             "container": ".event, .show-item, article",
             "title": "h2, h3, .title",
             "start": ".date, time",
@@ -72,13 +75,21 @@ SF_BAY_SOURCES: list[dict] = [
         "url": "https://slims-sf.com/calendar/",
         "region": "SF Bay Area",
         "timezone": "America/Los_Angeles",
-        "selectors": {
+        "config": {
             "container": ".event, .show, article",
             "title": "h2, h3, .event-title",
             "start": ".date, time",
             "url": "a",
             "url_attribute": "href",
         },
+    },
+    {
+        "name": "SFGate Events",
+        "url": "https://www.sfgate.com/culture-events/",
+        "region": "SF Bay Area",
+        "timezone": "America/Los_Angeles",
+        "source_type": "evvnt",
+        "config": {"publisher_id": 4298, "hits_per_page": 50},
     },
 ]
 
@@ -120,8 +131,9 @@ def seed_sources(session: Session) -> None:
             region=src_data["region"],
             timezone=src_data["timezone"],
             enabled=True,
-            scrape_frequency_minutes=360,
-            selectors=src_data["selectors"],
+            scrape_frequency_minutes=1440,
+            source_type=src_data.get("source_type", "html_css"),
+            config=src_data["config"],
             default_category="music",
         )
         session.add(source)
@@ -160,7 +172,7 @@ def seed_demo_events(session: Session) -> None:
             region="SF Bay Area",
             timezone="America/Los_Angeles",
             enabled=False,
-            selectors={"container": "div", "title": "h1", "start": "time"},
+            config={"container": "div", "title": "h1", "start": "time"},
             default_category="music",
         )
         session.add(source)
